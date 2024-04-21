@@ -1,0 +1,128 @@
+---
+title: "spiral plot"
+author: "Wenxi Ye"
+date: "2024-04-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## qué es la técnica de visualización spiral plot
+
+Esta visualización representa datos basados en el tiempo a lo largo de una espiral de Arquímedes. El gráfico comienza en el centro de la espiral y luego avanza hacia afuera. Los gráficos de espiral son versátiles y pueden representar barras, líneas o puntos a lo largo del camino espiral.
+
+Los gráficos de espiral son ideales para mostrar grandes conjuntos de datos, generalmente para mostrar tendencias a lo largo de un largo período de tiempo. Por lo tanto, los gráficos de espiral son excelentes para mostrar patrones periódicos. Se puede asignar un color a cada período para dividirlos y permitir cierta comparación entre cada período. Por lo tanto, por ejemplo, si quisiéramos mostrar datos durante un año, podríamos asignar un color para cada mes en el gráfico.
+
+## dataset
+
+https://www.kaggle.com/datasets/josepblasco/hidro-data?select=
+
+Datos de precipitaciones Los datos que emplearé pertenecen a la Agencia Estatal de Meteorología (AEMET), organismo público español encargado de la gestión y prestación de servicios meteorológicos y climáticos. AEMET se dedica a la observación, predicción, elaboración y difusión de información meteorológica y climática en España.
+
+```{r cars}
+df2021 = read.csv2("PREC_2021_Provincias.csv")
+df2020 = read.csv2("PREC_2020_Provincias.csv")
+df2019 = read.csv2("PREC_2019_Provincias.csv")
+head(df2021)
+head(df2020)
+head(df2019)
+```
+```{r}
+df2021_bcn = df2021[df2021$region=='BARCELONA',]
+df2020_bcn = df2020[df2020$region=='BARCELONA',]
+df2019_bcn = df2019[df2019$region=='BARCELONA',]
+
+library(tidyr)
+
+# Para el dataframe de 2021
+df2021_bcn_long <- gather(df2021_bcn, mes, valor, -region)
+df2021_bcn_long$anio <- 2021
+
+# Para el dataframe de 2020
+df2020_bcn_long <- gather(df2020_bcn, mes, valor, -region)
+df2020_bcn_long$anio <- 2020
+
+# Para el dataframe de 2019
+df2019_bcn_long <- gather(df2019_bcn, mes, valor, -region)
+df2019_bcn_long$anio <- 2019
+
+# Combinamos los dataframes en uno solo
+df_bcn <- rbind(df2021_bcn_long, df2020_bcn_long, df2019_bcn_long)
+
+# Reordenamos las columnas
+df_bcn <- df_bcn[, c("mes", "anio", "valor")]
+
+print(df_bcn)
+```
+
+```{r}
+library(dplyr)
+
+# Eliminamos filas que contienen la palabra "Parametro" en la columna "mes"
+df_bcn <- df_bcn %>%
+  filter(!grepl("Precipitacion", valor))
+
+# Eliminamos filas que contienen la palabra "anual" en la columna "mes"
+df_bcn <- df_bcn %>%
+  filter(!grepl("anual", mes))
+
+# Vector de nombres de los meses
+nombres_meses <- c("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+# Transformamos los nombres de los meses en números del 1 al 12
+df_bcn$mes <- match(df_bcn$mes, nombres_meses)
+
+# Imprimimos el dataframe resultante
+print(df_bcn)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Convertimos el año en factor
+df_bcn$anio <- as.factor(df_bcn$anio)
+df_bcn$valor <- as.numeric(df_bcn$valor)
+
+# Calcular la posición en y para cada año y mes
+df_bcn <- df_bcn %>%
+  mutate(y = as.numeric(anio) - 1 + (as.numeric(mes) - 1) / 12)
+
+# Definimos los niveles de month como números del 1 al 12
+df_bcn$mes <- factor(df_bcn$mes, levels = 1:12)
+
+bars <- df_bcn %>% 
+  mutate(value_norm = valor / (max(valor) * 1.1),
+         xmin = as.numeric(mes) - 0.5,
+         xmax = as.numeric(mes) + 0.5,
+         ymin = y,
+         ymax = y + value_norm)
+
+# Convertimos las barras en polígonos
+poly <- bars %>% 
+  rowwise() %>% 
+  do(with(., tibble(year = anio,
+                     month = mes,
+                     x = c(xmin, xmax, xmax, xmin),
+                     y = c(ymin - 1/24, 
+                           ymin + 1/24, 
+                           ymax + 1/24, 
+                           ymax - 1/24))))
+
+# Creamos el gráfico de espiral
+ggplot(poly, aes(x, y, fill = interaction(factor(month, levels = 1:12), year))) + 
+  geom_polygon(col = 1) +
+  coord_polar() +
+  ylim(-3, 5) + 
+  viridis::scale_fill_viridis(discrete = TRUE, option = 'C') +
+  scale_x_continuous(breaks = 1:12, labels = month.name) +  
+  labs( title = "Precipitación en Barcelona desde 2019 hasta 2021") + 
+  
+  theme_minimal() + 
+  theme(legend.position = "none", axis.text.y = element_blank(), axis.title = element_blank())  
+
+```
+
+
